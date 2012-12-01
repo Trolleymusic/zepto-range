@@ -32,17 +32,16 @@
         });
     };
 
-    $.translateX = function(element, delta) {
+    $.translate = function(element, delta, orientation, invert) {
         var property = property = $.CSS.getProperty('Transform');
         if (typeof delta === 'number') {
             delta = delta + 'px';
         }
-        if ($.supports.transform3d) {
-            return element.style[property] = 'translate3d(' + delta + ', 0, 0)';
-        } else if ($.supports.transform) {
-            return element.style[property] = 'translate(' + delta + ', 0)';
+        if ($.supports.transform3d || $.supports.transform) {
+	        delta = orientation === 'X' ? delta + ', 0' : '0,' + delta;
+	        return element.style[property] = ($.supports.transform3d ? 'translate3d(' + delta + ', 0)' : 'translate(' + delta + ')');
         } else {
-            return element.style.left = delta;
+            return element.style[(orientation === 'X' ? 'left' : 'top')] = delta;
         }
     };
 })(Zepto);
@@ -72,6 +71,12 @@
         this.max = parseInt(this.input.attr('max'), 10);
         this.amount = (this.max - this.min) + 1;
         this.current = parseInt(this.input.val(), 10) - this.min;
+        
+        // orientation
+        this.orientation = this.input.hasClass('vertical') ? 'Y' : 'X';
+        
+        // invert
+        this.invert = this.input.hasClass('invert');
 
         // html
         this.btn = $('<div class="btn">');
@@ -118,8 +123,8 @@
             return $('<div class="label">').text(item == undefined ? '' : item);
         }));
 
-        container.children().width(size);
-        container.find(':first-child, :last-child').width(size / 2 + range.btn.size / 2);
+        container.children()[range.orientation === 'X' ? 'width' : 'height'](size);
+        container.find(':first-child, :last-child')[range.orientation === 'X' ? 'width' : 'height'](size / 2 + range.btn.size / 2);
 
         return container;
     }
@@ -132,9 +137,10 @@
             return this.container.toggleClass('moving', status);
         },
         move: function(to) {
-            var pos = to * this.gap;
-            $.translateX(this.btn[0], pos);
-            this.fill.width(pos);
+            var pos = to * this.gap,
+            	fillPos = (this.invert ? this.max * this.gap - pos : pos);
+            $.translate(this.btn[0], pos, this.orientation);
+            this.fill[(this.orientation === 'X' ? 'width' : 'height')](fillPos);
             this.input.trigger('move', [to, this]);
         },
         change: function(to) {
@@ -142,7 +148,7 @@
             this.move(to);
 
             this.current = to;
-            this.input.val(this.current + this.min);
+            this.input.val(this.invert ? this.max - this.current : this.current + this.min);
             this.input.trigger('change', [to, this]);
         }
     });
@@ -155,12 +161,12 @@
         doc.on(defaults.startGesture, className + ' .btn', function (event) {
             var range = getRange(this),
                 pos = range && range.pos(),
-                initPos = event.pageX || (event.touches[0] && event.touches[0].pageX) || 0;
+                initPos = event['page' + range.orientation] || (event.touches[0] && event.touches[0]['page' + range.orientation]) || 0;
 
             function animate(event) {
                 event.preventDefault();
                 pos = range.pos() - initPos;
-                pos += event.pageX || (event.touches[0] && event.touches[0].pageX) || 0;
+                pos += event['page' + range.orientation] || (event.touches[0] && event.touches[0]['page' + range.orientation]) || 0;
                 pos = Math.max(0, Math.min(pos, range.size));
                 range.move(pos / range.gap);
             }
